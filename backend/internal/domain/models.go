@@ -6,6 +6,11 @@ import (
 	"time"
 )
 
+// =============================================================================
+// MONOREPO PATH: backend/internal/domain/models.go
+// Kontrak Struct Murni, Interface Hexagonal Provider, & Fraksi Harga BEI
+// =============================================================================
+
 type RegimeType string
 
 const (
@@ -13,6 +18,29 @@ const (
 	RegimeCyclical     RegimeType = "CYCLICAL_HIGH_BETA"
 	RegimeConglomerate RegimeType = "CONGLOMERATE_THIRD_LINER"
 )
+
+type OHLCVBar struct {
+	Timestamp time.Time `json:"timestamp"`
+	Ticker    string    `json:"ticker"`
+	Open      float64   `json:"open"`
+	High      float64   `json:"high"`
+	Low       float64   `json:"low"`
+	Close     float64   `json:"close"`
+	Volume    int64     `json:"volume"`
+	VWAP      float64   `json:"vwap"`
+	RVOL      float64   `json:"rvol"`
+}
+
+type DailyFlowRecord struct {
+	Ticker         string  `json:"ticker"`
+	ClosePrice     float64 `json:"close_price"`
+	Volume         int64   `json:"volume"`
+	ValueIDR       float64 `json:"value_idr"`
+	Frequency      int     `json:"frequency"`
+	ForeignBuyVal  float64 `json:"foreign_buy_val"`
+	ForeignSellVal float64 `json:"foreign_sell_val"`
+	NetForeignVal  float64 `json:"net_foreign_val"`
+}
 
 type MacroState struct {
 	IHSGPrice         float64 `json:"ihsg_price"`
@@ -119,17 +147,16 @@ type ConfluenceResult struct {
 	Plan                   TradePlan        `json:"trade_plan"`
 }
 
-// Provider Interfaces (Hexagonal Ports) agar mudah diganti tanpa menyentuh rumus strategi
 type MarketQuoteProvider interface {
-	FetchLatestQuote(ctx context.Context, tickerJK string) (float64, error)
+	FetchCandles(ctx context.Context, ticker string, interval string, rangePeriod string) ([]OHLCVBar, float64, error)
 }
 
 type SmartMoneyProvider interface {
-	FetchBrokerSummary(ctx context.Context, ticker string, date string) (SmartMoneyInput, error)
+	FetchBrokerSummary(ctx context.Context, ticker string, date string, totalDailyVal float64) (SmartMoneyInput, error)
 }
 
 type NewsFeedProvider interface {
-	FetchLatestNews(ctx context.Context, ticker string) ([]NewsArticle, error)
+	PollAllPortals(ctx context.Context, watchedTickers []string) ([]NewsArticle, error)
 }
 
 // RoundToIDXTick membulatkan harga sesuai aturan Fraksi Harga BEI

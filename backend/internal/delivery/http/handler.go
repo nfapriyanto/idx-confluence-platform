@@ -10,8 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/idx-trader/confluence-platform/internal/backtest"
 	"github.com/idx-trader/confluence-platform/internal/domain"
 	"github.com/idx-trader/confluence-platform/internal/nlp"
+	"github.com/idx-trader/confluence-platform/internal/notifier"
 	"github.com/idx-trader/confluence-platform/internal/providers/idx"
 	"github.com/idx-trader/confluence-platform/internal/providers/ipot"
 	"github.com/idx-trader/confluence-platform/internal/providers/rss"
@@ -21,7 +23,8 @@ import (
 
 // =============================================================================
 // MONOREPO PATH: backend/internal/delivery/http/handler.go
-// Handler REST API, Server-Sent Events (SSE), & Orkestrasi Jadwal Jam Bursa BEI
+// Handler REST API (/api/v1/signals, /api/v1/backtest), Live SSE (/api/v1/stream),
+// Telegram Alert Trigger, & Orkestrasi Jadwal Jam Bursa BEI
 // =============================================================================
 
 type Handler struct {
@@ -32,6 +35,7 @@ type Handler struct {
 	idxClient   *idx.Client
 	ipotClient  *ipot.Client
 	rssClient   *rss.Client
+	tgNotifier  *notifier.TelegramNotifier
 	wibLoc      *time.Location
 	Macro       domain.MacroState         `json:"macro"`
 	Signals     []domain.ConfluenceResult `json:"signals"`
@@ -58,13 +62,13 @@ func NewHandler(
 		idxClient:   idxClient,
 		ipotClient:  ipotClient,
 		rssClient:   rssClient,
+		tgNotifier:  notifier.NewTelegramNotifierFromEnv(),
 		wibLoc:      loc,
 		Macro:       macro,
 		Signals:     signals,
 	}
 }
 
-// IsIDXTradingHours memeriksa apakah waktu saat ini berada di Sesi 1 atau Sesi 2 BEI
 func (h *Handler) IsIDXTradingHours(now time.Time) bool {
 	wib := now.In(h.wibLoc)
 	wd := wib.Weekday()
@@ -72,16 +76,15 @@ func (h *Handler) IsIDXTradingHours(now time.Time) bool {
 		return false
 	}
 	mins := wib.Hour()*60 + wib.Minute()
-	s1End := 720 // 12:00 WIB
-	s2Start := 810 // 13:30 WIB
+	s1End := 720
+	s2Start := 810
 	if wd == time.Friday {
-		s1End = 690 // 11:30 WIB
-		s2Start = 840 // 14:00 WIB
+		s1End = 690
+		s2Start = 840
 	}
 	return (mins >= 540 && mins <= s1End) || (mins >= s2Start && mins <= 950)
 }
 
-// StartIDXMarketScheduler menjalankan cron otomatis untuk Scalping (1m), RSS (10m), dan Bandarmology (16:35 WIB)
 func (h *Handler) StartIDXMarketScheduler(ctx context.Context) {
 	minuteTicker := time.NewTicker(1 * time.Minute)
 	rssTicker := time.NewTicker(10 * time.Minute)
@@ -116,8 +119,6 @@ func (h *Handler) StartIDXMarketScheduler(ctx context.Context) {
 
 func (h *Handler) RefreshConfluenceScores(ctx context.Context) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
-
 	updated := make([]domain.ConfluenceResult, len(h.Signals))
 	for i, item := range h.Signals {
 		updated[i] = strategy.EvaluateWithNLP(
@@ -131,9 +132,15 @@ func (h *Handler) RefreshConfluenceScores(ctx context.Context) {
 		)
 	}
 	h.Signals = updated
+	h.mu.Unlock()
+
+	if h.tgNotifier != nil && h.tgNotifier.IsEnabled() {
+		_ = h.tgNotifier.NotifyHighConvictionSignals(ctx, updated)
+	}
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	// 1. Endpoint Sinyal Konfluensi 5 Lapis
 	mux.HandleFunc("/api/v1/signals", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Content-Type", "application/json")
@@ -142,6 +149,34 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 		_ = json.NewEncoder(w).Encode(h)
 	})
 
+	// 2. Endpoint Simulator Backtesting Walk-Forward (Fee Beli 0.15%, Fee Jual 0.25%)
+	mux.HandleFunc("/api/v1/backtest", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+		ticker := r.URL.Query().Get("ticker")
+		if ticker == "" {
+			ticker = "BMRI"
+		}
+
+		h.mu.RLock()
+		var targetSig domain.ConfluenceResult
+		if len(h.Signals) > 0 {
+			targetSig = h.Signals[0]
+		}
+		for _, s := range h.Signals {
+			if s.Fundamental.Ticker == ticker {
+				targetSig = s
+				break
+			}
+		}
+		h.mu.RUnlock()
+
+		history := generateSampleWalkForwardHistory(targetSig)
+		report := backtest.RunWalkForwardBacktest(ticker, history, backtest.DefaultIDXConfig())
+		_ = json.NewEncoder(w).Encode(report)
+	})
+
+	// 3. Endpoint Server-Sent Events (SSE) Live Intraday Stream
 	mux.HandleFunc("/api/v1/stream", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -169,4 +204,40 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 			}
 		}
 	})
+}
+
+func generateSampleWalkForwardHistory(base domain.ConfluenceResult) []backtest.HistoricalDayInput {
+	var out []backtest.HistoricalDayInput
+	price := base.Fundamental.LastPrice * 0.86
+	startTime := time.Now().AddDate(0, -6, 0)
+
+	for i := 0; i < 120; i++ {
+		dt := startTime.AddDate(0, 0, i)
+		wave := 1.0 + 0.012*float64((i%9)-4)
+		openP := domain.RoundToIDXTick(price)
+		closeP := domain.RoundToIDXTick(price * wave)
+		highP := domain.RoundToIDXTick(closeP * 1.018)
+		lowP := domain.RoundToIDXTick(openP * 0.988)
+		price = closeP
+
+		sig := base
+		sig.Fundamental.LastPrice = closeP
+		sig.Plan.StopLossPrice = domain.RoundToIDXTick(closeP * 0.96)
+		sig.Plan.TakeProfit2 = domain.RoundToIDXTick(closeP * 1.065)
+
+		out = append(out, backtest.HistoricalDayInput{
+			Date: dt,
+			Bar: domain.OHLCVBar{
+				Timestamp: dt,
+				Ticker:    base.Fundamental.Ticker,
+				Open:      openP,
+				High:      highP,
+				Low:       lowP,
+				Close:     closeP,
+				Volume:    45_000_000,
+			},
+			Confluence: sig,
+		})
+	}
+	return out
 }
