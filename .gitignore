@@ -1,0 +1,47 @@
+# Environment variables
+.env
+.env*.local
+
+# Binaries and executables
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+backend/bin/
+backend/tmp/
+
+# Go build & test artifacts
+*.test
+*.out
+coverage.txt
+
+# Node & Frontend dependencies & build outputs
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+.npm/
+
+# Database & persistence volumes (if local)
+pgdata/
+*.sqlite
+*.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE & Editor folders
+.idea/
+.vscode/
+*.swp
+*.swo
