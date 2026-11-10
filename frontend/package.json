@@ -1,0 +1,22 @@
+{
+  "name": "idx-confluence-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000"
+  },
+  "dependencies": {
+    "next": "^16.0.0 || ^15.2.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "lightweight-charts": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.7.0",
+    "tailwindcss": "^4.0.0"
+  }
+}
