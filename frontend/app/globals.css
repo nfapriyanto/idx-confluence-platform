@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+/* =============================================================================
+ * MONOREPO PATH: frontend/src/app/globals.css
+ * Stylesheet Global Tailwind CSS v4 untuk Next.js 16
+ * ============================================================================= */
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #020617;
+  color: #f1f5f9;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
