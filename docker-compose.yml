@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg17
+    container_name: idx_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-idxtrader}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-idxsecret2026}
+      POSTGRES_DB: ${DB_NAME:-idx_confluence}
+      TZ: Asia/Jakarta
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-idxtrader} -d ${DB_NAME:-idx_confluence}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: idx_go_engine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://${DB_USER:-idxtrader}:${DB_PASSWORD:-idxsecret2026}@postgres:5432/${DB_NAME:-idx_confluence}?sslmode=disable
+      MODEL_PATH: /app/models/indobert_sentiment.onnx
+      LEXICON_PATH: /app/models/idx_lexicon.json
+      TZ: Asia/Jakarta
+    volumes:
+      - ./models:/app/models:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: idx_nextjs_web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      INTERNAL_API_URL: http://backend:8080
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      NEXT_PUBLIC_APP_URL: https://${DOMAIN_NAME:-localhost:3000}
+      TZ: Asia/Jakarta
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: idx_tunnel
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    environment:
+      TZ: Asia/Jakarta
+    # Di Cloudflare Zero Trust Dashboard -> Public Hostname -> arahkan ke http://frontend:3000
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:-YOUR_CLOUDFLARE_ZERO_TRUST_TOKEN}
+
+volumes:
+  pgdata:
