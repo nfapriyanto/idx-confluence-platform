@@ -1,0 +1,55 @@
+{
+  "meta": {
+    "description": "Kamus Leksikon Keuangan & Bandarmologi Bursa Efek Indonesia (BEI) untuk Koreksi Domain IndoBERT (Bobot 60% IndoBERT + 40% Lexicon)",
+    "decay_half_life_days": 3.0,
+    "reference": "Hybrid Decision Support System for LQ45 Stock Screening Integrating Fundamental, Technical, and IndoBERT-Based Sentiment Analysis (JAIC, 2026)"
+  },
+  "bullish_keywords": {
+    "dividen jumbo": 35,
+    "dividen interim": 25,
+    "cum date": 20,
+    "buyback saham": 30,
+    "akumulasi asing": 28,
+    "net foreign buy": 25,
+    "laba bersih melonjak": 32,
+    "laba tumbuh": 24,
+    "masuk indeks msci": 35,
+    "masuk lq45": 22,
+    "auto reject atas": 25,
+    "ara berjilid": 30,
+    "akuisisi strategis": 24,
+    "kontrak baru": 22,
+    "oversubscribed": 20,
+    "undervalued": 18,
+    "breakout resisten": 20,
+    "borong saham": 26,
+    "pengendali tambah kepemilikan": 30
+  },
+  "bearish_keywords": {
+    "gugat pkpu": -45,
+    "pailit": -50,
+    "suspensi bei": -40,
+    "delisting": -50,
+    "unusual market activity": -22,
+    "uma bei": -20,
+    "auto reject bawah": -35,
+    "arb berjilid": -42,
+    "rugi bersih membengkak": -35,
+    "berbalik rugi": -32,
+    "gagal bayar": -48,
+    "default obligasi": -48,
+    "right issue dilusi": -25,
+    "distribusi masif": -28,
+    "asing kabur": -25,
+    "net foreign sell": -22,
+    "keluar dari msci": -35,
+    "papan pemantauan khusus": -30,
+    "full call auction": -28
+  },
+  "sector_spillover_map": {
+    "COMMODITY_COAL": ["ITMG", "ADRO", "PTBA", "INDY", "HRUM", "ABMM"],
+    "BANKING_BIG4": ["BBCA", "BBRI", "BMRI", "BBNI"],
+    "TELCO_INFRA": ["TLKM", "ISAT", "EXCL", "MTEL", "TOWR"],
+    "GOLD_MINING": ["ANTM", "MDKA", "BRMS", "PSAB", "HRTA"]
+  }
+}
